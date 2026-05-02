@@ -20,7 +20,7 @@ def generate_data():
 
                 # Inject theft
                 if meter_id % 5 == 0 and day > 15:
-                    consumption *= 0.3
+                    consumption *= 0.15
 
                 records.append({
                     'meter_id': f'MTR_{meter_id:04d}',
