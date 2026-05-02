@@ -18,7 +18,7 @@ def signal_peer_cluster(df):
     zone_stats = peer.groupby('feeder_zone')['consumption_kwh'].agg(['mean','std']).reset_index()
     zone_stats.columns = ['feeder_zone', 'zone_mean', 'zone_std']
     peer = peer.merge(zone_stats, on='feeder_zone')
-    peer['threshold'] = peer['zone_mean'] - peer['zone_std']
+    peer['threshold'] = peer['zone_mean'] - (peer['zone_std'] * 1.0)
     peer['signal_peer'] = (peer['consumption_kwh'] < peer['threshold']).astype(int)
     return peer[['meter_id', 'signal_peer']]
 
@@ -27,7 +27,7 @@ def signal_pattern_flag(df):
     recent = df[df['timestamp'] >= df['timestamp'].max() - pd.Timedelta(days=15)]
     evening = recent[recent['hour'].between(18, 22)]
     eve_avg = evening.groupby('meter_id')['consumption_kwh'].mean().reset_index()
-    threshold = eve_avg['consumption_kwh'].quantile(0.15)
+    threshold = eve_avg['consumption_kwh'].quantile(0.20)
     eve_avg['signal_pattern'] = (eve_avg['consumption_kwh'] < threshold).astype(int)
     return eve_avg[['meter_id', 'signal_pattern']]
 
