@@ -10,25 +10,26 @@ def signal_residual_deviation(df):
 
 
 def signal_peer_cluster(df):
-    peer = df.groupby(['feeder_zone', 'meter_id'])['consumption_kwh'].mean().reset_index()
-    zone_avg = peer.groupby('feeder_zone')['consumption_kwh'].mean().reset_index()
-    zone_avg.columns = ['feeder_zone', 'zone_avg']
-
-    peer = peer.merge(zone_avg, on='feeder_zone')
-    peer['signal_peer'] = (peer['consumption_kwh'] < peer['zone_avg'] * 0.5).astype(int)
-
+    """Flag meters consuming far less than peers using std deviation"""
+    recent = df[df['timestamp'] >= df['timestamp'].max() - pd.Timedelta(days=15)]
+    peer = recent.groupby(['feeder_zone', 'meter_id'])['consumption_kwh'].mean().reset_index()
+    
+    # Use mean - 1 std as threshold instead of 50% of zone average
+    zone_stats = peer.groupby('feeder_zone')['consumption_kwh'].agg(['mean','std']).reset_index()
+    zone_stats.columns = ['feeder_zone', 'zone_mean', 'zone_std']
+    peer = peer.merge(zone_stats, on='feeder_zone')
+    peer['threshold'] = peer['zone_mean'] - peer['zone_std']
+    peer['signal_peer'] = (peer['consumption_kwh'] < peer['threshold']).astype(int)
     return peer[['meter_id', 'signal_peer']]
 
-
 def signal_pattern_flag(df):
-    evening = df[df['hour'].between(18, 22)]
+    """Flag meters with unusual evening dip - only look at last 15 days"""
+    recent = df[df['timestamp'] >= df['timestamp'].max() - pd.Timedelta(days=15)]
+    evening = recent[recent['hour'].between(18, 22)]
     eve_avg = evening.groupby('meter_id')['consumption_kwh'].mean().reset_index()
-
     threshold = eve_avg['consumption_kwh'].quantile(0.15)
     eve_avg['signal_pattern'] = (eve_avg['consumption_kwh'] < threshold).astype(int)
-
     return eve_avg[['meter_id', 'signal_pattern']]
-
 
 def signal_feeder_imbalance(df):
     meter_sum = df.groupby('feeder_zone')['consumption_kwh'].sum().reset_index()
