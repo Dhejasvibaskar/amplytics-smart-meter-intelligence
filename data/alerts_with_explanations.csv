@@ -1,52 +1,52 @@
-meter_id,signal_residual,signal_peer,signal_pattern,signal_feeder,feeder_zone,signal_count,alert_triggered,risk_level,explanation
+meter_id,signal_residual,signal_peer,signal_pattern,signal_feeder,feeder_zone,signal_count,alert_triggered,risk_level,explanation,confidence_pct,estimated_monthly_loss_inr,loss_display
 MTR_0005,1,0,0,1,Zone_1,2,True,Medium,"WHY: consumption deviates from baseline + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0010,0,0,1,1,Zone_1,2,True,Medium,"WHY: unusual evening dip pattern detected + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0014,1,0,0,1,Zone_5,2,True,Medium,"WHY: consumption deviates from baseline + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0015,0,0,1,1,Zone_1,2,True,Medium,"WHY: unusual evening dip pattern detected + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0018,1,0,0,1,Zone_4,2,True,Medium,"WHY: consumption deviates from baseline + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0019,0,1,0,1,Zone_5,2,True,Medium,"WHY: usage is far below peer cluster + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0020,0,1,1,1,Zone_1,3,True,High,"WHY: usage is far below peer cluster + unusual evening dip pattern detected + feeder-meter energy imbalance
 HOW SERIOUS: High risk (3 signals)
-WHAT TO DO: Immediate physical inspection recommended"
+WHAT TO DO: Immediate physical inspection recommended",75.0,10530.0,"Rs 10,530/month"
 MTR_0023,1,0,0,1,Zone_4,2,True,Medium,"WHY: consumption deviates from baseline + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0024,1,0,0,1,Zone_5,2,True,Medium,"WHY: consumption deviates from baseline + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0025,0,0,1,1,Zone_1,2,True,Medium,"WHY: unusual evening dip pattern detected + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0029,1,0,0,1,Zone_5,2,True,Medium,"WHY: consumption deviates from baseline + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0030,0,0,1,1,Zone_1,2,True,Medium,"WHY: unusual evening dip pattern detected + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0035,0,0,1,1,Zone_1,2,True,Medium,"WHY: unusual evening dip pattern detected + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0040,0,0,1,1,Zone_1,2,True,Medium,"WHY: unusual evening dip pattern detected + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0048,0,1,0,1,Zone_4,2,True,Medium,"WHY: usage is far below peer cluster + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0049,1,0,0,1,Zone_5,2,True,Medium,"WHY: consumption deviates from baseline + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
 MTR_0050,0,0,1,1,Zone_1,2,True,Medium,"WHY: unusual evening dip pattern detected + feeder-meter energy imbalance
 HOW SERIOUS: Medium risk (2 signals)
-WHAT TO DO: Schedule inspection within 48 hours"
+WHAT TO DO: Schedule inspection within 48 hours",50.0,7020.0,"Rs 7,020/month"
