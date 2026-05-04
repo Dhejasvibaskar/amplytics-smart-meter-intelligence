@@ -39,37 +39,37 @@ section[data-testid="stSidebar"] .stRadio label {
 }
 .main .block-container {
     background: #0d1117;
-    padding-top: 2rem;
+    padding-top: 1.5rem;
     max-width: 1400px;
 }
 .amp-header {
-    background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+    background: linear-gradient(135deg,#161b22 0%,#0d1117 100%);
     border: 1px solid #21262d;
     border-radius: 14px;
-    padding: 28px 36px;
-    margin-bottom: 28px;
+    padding: 24px 32px;
+    margin-bottom: 24px;
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 18px;
 }
 .amp-title {
     font-family: 'Space Mono', monospace;
-    font-size: 2rem;
+    font-size: 1.9rem;
     font-weight: 700;
     color: #e6edf3;
     letter-spacing: 3px;
     margin: 0;
     line-height: 1;
 }
-.amp-subtitle { color: #8b949e; font-size: 0.9rem; margin: 6px 0 10px 0; }
+.amp-subtitle { color: #8b949e; font-size: 0.88rem; margin: 5px 0 9px 0; }
 .amp-badge {
     display: inline-block;
-    background: linear-gradient(90deg, #d4a017, #f0c040);
+    background: linear-gradient(90deg,#d4a017,#f0c040);
     color: #0d1117;
     border-radius: 6px;
-    padding: 3px 14px;
+    padding: 3px 13px;
     font-family: 'Space Mono', monospace;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 1.5px;
 }
@@ -79,7 +79,7 @@ section[data-testid="stSidebar"] .stRadio label {
     background: #161b22;
     border: 1px solid #21262d;
     border-radius: 12px;
-    padding: 20px 24px;
+    padding: 18px 20px;
     border-top: 3px solid #30363d;
 }
 .kpi-card.blue   { border-top-color: #1f6feb; }
@@ -535,7 +535,8 @@ def show_operator_dashboard():
     with f1:
         filter_risk = st.selectbox("Risk Level", ["All","High","Medium","Low"])
     with f2:
-        filter_zone = st.selectbox("Feeder Zone", ["All"] + sorted(df['feeder_zone'].unique().tolist()))
+        filter_zone = st.selectbox("Feeder Zone",
+                                   ["All"] + sorted(df['feeder_zone'].unique().tolist()))
 
     filtered = df.copy()
     if filter_risk != "All":
@@ -742,6 +743,7 @@ def show_consumer_dashboard():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # ── Bill cards ──
     b1, b2, b3 = st.columns(3)
     with b1:
         st.markdown(f"""
