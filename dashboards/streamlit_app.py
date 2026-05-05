@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# DESIGN SYSTEM — Full dark, consistent
+# DESIGN SYSTEM
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -221,9 +221,11 @@ PLOT_BASE = dict(
 def dark_ax(gx=True, gy=True, tx='', ty=''):
     return dict(
         xaxis=dict(showgrid=gx, gridcolor='#21262d', linecolor='#30363d',
-                   tickfont=dict(color='#8b949e'), title=tx, title_font=dict(color='#8b949e')),
+                   tickfont=dict(color='#8b949e'), title=tx,
+                   title_font=dict(color='#8b949e')),
         yaxis=dict(showgrid=gy, gridcolor='#21262d', linecolor='#30363d',
-                   tickfont=dict(color='#8b949e'), title=ty, title_font=dict(color='#8b949e')),
+                   tickfont=dict(color='#8b949e'), title=ty,
+                   title_font=dict(color='#8b949e')),
     )
 
 # ─────────────────────────────────────────────
@@ -250,42 +252,44 @@ with st.sidebar:
     st.markdown("""
     <hr style='border:none; border-top:1px solid #21262d; margin:18px 0 12px 0;'>
     <div style='font-size:0.7rem; color:#8b949e; padding:0 4px;'>
-        <span style='font-family:Space Mono,monospace; color:#58a6ff; font-size:0.66rem;'>BESCOM THEME 8</span><br><br>
+        <span style='font-family:Space Mono,monospace; color:#58a6ff; font-size:0.66rem;'>
+        BESCOM THEME 8</span><br><br>
         AI for Smart Meter Intelligence &amp; Loss Detection
     </div>
     """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# DATA LOADERS — NO synthetic data. App stops
-# clearly if any file is missing.
-#
-# FILES REQUIRED FROM TEAMMATES:
+# DATA LOADERS
+# FILES REQUIRED:
 #   data/alerts_with_explanations.csv  ← DHEJASVI
-#   data/forecast_output.csv           ← SUNETRA
+#   data/forecast_output.csv           ← SUNETRA (has meter_id column)
 #   data/severity_trend.csv            ← DHEJASVI
 # ─────────────────────────────────────────────
 
+@st.cache_data
 def load_alerts():
     path = "data/alerts_with_explanations.csv"
     if not os.path.exists(path):
-        st.error("Missing: data/alerts_with_explanations.csv — pull latest from Dhejasvi's branch.")
+        st.error("Missing: data/alerts_with_explanations.csv — pull from Dhejasvi's branch.")
         st.stop()
     return pd.read_csv(path)
 
+@st.cache_data
 def load_forecast():
     path = "data/forecast_output.csv"
     if not os.path.exists(path):
-        st.error("Missing: data/forecast_output.csv — pull latest from Sunetra's branch.")
+        st.error("Missing: data/forecast_output.csv — pull from Sunetra's branch.")
         st.stop()
-    return pd.read_csv(path, parse_dates=['timestamp'])
+    df = pd.read_csv(path, parse_dates=['timestamp'])
+    return df
 
+@st.cache_data
 def load_severity_trend():
     path = "data/severity_trend.csv"
     if not os.path.exists(path):
-        st.error("Missing: data/severity_trend.csv — pull latest from Dhejasvi's branch.")
+        st.error("Missing: data/severity_trend.csv — pull from Dhejasvi's branch.")
         st.stop()
     df = pd.read_csv(path, parse_dates=['date'])
-    # normalise column casing
     df.columns = [
         c.strip().capitalize() if c.strip().lower() in ['high', 'medium', 'low']
         else ('date' if c.strip().lower() == 'date' else c.strip())
@@ -294,8 +298,14 @@ def load_severity_trend():
     return df
 
 # ─────────────────────────────────────────────
-# PDF REPORT GENERATOR
+# PDF GENERATOR
 # ─────────────────────────────────────────────
+def clean_text(text):
+    return (str(text)
+            .replace('\u2014', '-').replace('\u2013', '-')
+            .replace('\u203a', '>').replace('\u2019', "'")
+            .replace('\u201c', '"').replace('\u201d', '"'))
+
 def generate_pdf(row):
     pdf = FPDF()
     pdf.add_page()
@@ -307,7 +317,8 @@ def generate_pdf(row):
     pdf.cell(0, 15, 'AMPLYTICS', ln=True, align='C')
     pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(139, 148, 158)
-    pdf.cell(0, 6, 'Smart Meter Intelligence Platform - Inspection Report', ln=True, align='C')
+    pdf.cell(0, 6, clean_text('Smart Meter Intelligence Platform - Inspection Report'),
+             ln=True, align='C')
     pdf.ln(10)
     pdf.set_fill_color(22, 27, 34)
     pdf.set_text_color(230, 237, 243)
@@ -316,30 +327,33 @@ def generate_pdf(row):
     pdf.cell(170, 10, f'Alert Report: {row["meter_id"]}', ln=True, align='L', fill=True)
     pdf.ln(4)
     lines     = str(row['explanation']).split('\n')
-    why_text  = next((l.replace('WHY: ', '') for l in lines if l.startswith('WHY')), 'N/A')
-    how_text  = next((l.replace('HOW SERIOUS: ', '') for l in lines if l.startswith('HOW')), 'N/A')
-    what_text = next((l.replace('WHAT TO DO: ', '') for l in lines if l.startswith('WHAT')), 'N/A')
+    why_text  = next((l.replace('WHY: ', '')         for l in lines if l.startswith('WHY')),  'N/A')
+    how_text  = next((l.replace('HOW SERIOUS: ', '')  for l in lines if l.startswith('HOW')),  'N/A')
+    what_text = next((l.replace('WHAT TO DO: ', '')   for l in lines if l.startswith('WHAT')), 'N/A')
     def section(title, value, color=(139, 148, 158)):
         pdf.set_font('Helvetica', 'B', 9)
         pdf.set_text_color(88, 166, 255)
         pdf.cell(0, 7, title, ln=True)
         pdf.set_font('Helvetica', '', 10)
         pdf.set_text_color(*color)
-        pdf.multi_cell(0, 6, value)
+        pdf.multi_cell(0, 6, clean_text(value))
         pdf.ln(2)
-    rc = {'High': (248,81,73), 'Medium': (210,153,34), 'Low': (63,185,80)}.get(str(row['risk_level']), (139,148,158))
-    section('METER ID',          str(row['meter_id']),                  (230, 237, 243))
-    section('FEEDER ZONE',       str(row['feeder_zone']),               (230, 237, 243))
-    section('RISK LEVEL',        str(row['risk_level']),                rc)
-    section('SIGNALS TRIGGERED', str(row['signal_count']) + ' out of 4',(230, 237, 243))
-    section('WHY FLAGGED',       why_text)
-    section('HOW SERIOUS',       how_text)
-    section('RECOMMENDED ACTION',what_text,                             (248, 81, 73))
+    rc = {'High':(248,81,73),'Medium':(210,153,34),'Low':(63,185,80)}.get(
+         str(row['risk_level']), (139,148,158))
+    section('METER ID',           str(row['meter_id']),                   (230,237,243))
+    section('FEEDER ZONE',        str(row['feeder_zone']),                (230,237,243))
+    section('RISK LEVEL',         str(row['risk_level']),                 rc)
+    section('SIGNALS TRIGGERED',  str(row['signal_count']) + ' out of 4',(230,237,243))
+    section('WHY FLAGGED',        why_text)
+    section('HOW SERIOUS',        how_text)
+    section('RECOMMENDED ACTION', what_text,                              (248,81,73))
     pdf.set_y(-25)
     pdf.set_font('Helvetica', 'I', 8)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 6, 'Generated by Amplytics - AI for Bharat 2026 | BESCOM Theme 8', align='C')
-    return bytes(pdf.output())
+    pdf.cell(0, 6, clean_text('Generated by Amplytics - AI for Bharat 2026 | BESCOM Theme 8'),
+             align='C')
+    output = pdf.output(dest='S')
+    return output.encode('latin-1') if isinstance(output, str) else bytes(output)
 
 # ─────────────────────────────────────────────
 # PAGE 1 — OPERATOR DASHBOARD
@@ -363,10 +377,14 @@ def show_operator_dashboard():
 
     st.markdown(f"""
     <div class='kpi-row'>
-        <div class='kpi-card blue'><div class='kpi-label'>Total Alerts</div><div class='kpi-value'>{total}</div></div>
-        <div class='kpi-card coral'><div class='kpi-label'>High Risk</div><div class='kpi-value'>{high}</div></div>
-        <div class='kpi-card amber'><div class='kpi-label'>Medium Risk</div><div class='kpi-value'>{medium}</div></div>
-        <div class='kpi-card teal'><div class='kpi-label'>Low Risk</div><div class='kpi-value'>{low}</div></div>
+        <div class='kpi-card blue'><div class='kpi-label'>Total Alerts</div>
+            <div class='kpi-value'>{total}</div></div>
+        <div class='kpi-card coral'><div class='kpi-label'>High Risk</div>
+            <div class='kpi-value'>{high}</div></div>
+        <div class='kpi-card amber'><div class='kpi-label'>Medium Risk</div>
+            <div class='kpi-value'>{medium}</div></div>
+        <div class='kpi-card teal'><div class='kpi-label'>Low Risk</div>
+            <div class='kpi-value'>{low}</div></div>
     </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -375,9 +393,9 @@ def show_operator_dashboard():
     st.markdown("<div class='section-title'>Simulation Mode</div>", unsafe_allow_html=True)
     st.markdown("""
     <div class='sim-box'>
-        <div style='font-family:Space Mono,monospace; color:#f85149; font-size:0.78rem;
-                    letter-spacing:1px; margin-bottom:6px;'>ANOMALY INJECTION SIMULATOR</div>
-        <div style='color:#8b949e; font-size:0.84rem;'>
+        <div style='font-family:Space Mono,monospace;color:#f85149;font-size:0.78rem;
+                    letter-spacing:1px;margin-bottom:6px;'>ANOMALY INJECTION SIMULATOR</div>
+        <div style='color:#8b949e;font-size:0.84rem;'>
             Inject a simulated theft pattern and watch all 5 layers catch it live.
         </div>
     </div>""", unsafe_allow_html=True)
@@ -403,13 +421,15 @@ def show_operator_dashboard():
         ]:
             prog.progress(pct)
             status.markdown(
-                f"<p style='color:#58a6ff;font-family:Space Mono,monospace;font-size:0.78rem;'>{msg}</p>",
+                f"<p style='color:#58a6ff;font-family:Space Mono,monospace;"
+                f"font-size:0.78rem;'>{msg}</p>",
                 unsafe_allow_html=True)
             time.sleep(0.55)
         prog.empty(); status.empty()
         st.markdown(f"""
-        <div class='alert-card high' style='border:1px solid rgba(248,81,73,0.4); margin-top:8px;'>
-            <div style='display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;'>
+        <div class='alert-card high' style='border:1px solid rgba(248,81,73,0.4);margin-top:8px;'>
+            <div style='display:flex;align-items:center;justify-content:space-between;
+                        flex-wrap:wrap;gap:8px;'>
                 <span>
                     <span class='alert-meter'>🔴 {sim_meter}</span>
                     <span class='risk-badge High'>High Risk</span>
@@ -427,13 +447,13 @@ def show_operator_dashboard():
                 recommended — assign field inspector within 24 hours
             </div>
         </div>
-        <p style='color:#3fb950;font-family:Space Mono,monospace;font-size:0.72rem;margin-top:6px;'>
-            System successfully detected injected anomaly in 3.2 seconds.</p>
+        <p style='color:#3fb950;font-family:Space Mono,monospace;font-size:0.72rem;
+                  margin-top:6px;'>System detected injected anomaly in 3.2 seconds.</p>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Charts ──
+    # ── Zone Risk + Signal charts ──
     left, right = st.columns([1.3, 1])
     with left:
         st.markdown("<div class='section-title'>Zone Risk Overview</div>", unsafe_allow_html=True)
@@ -441,7 +461,9 @@ def show_operator_dashboard():
         fig = px.bar(zone_summary, x='feeder_zone', y='count', color='risk_level', barmode='stack',
                      color_discrete_map={'High':'#f85149','Medium':'#d29922','Low':'#3fb950'},
                      labels={'feeder_zone':'Feeder Zone','count':'Alert Count','risk_level':'Risk'})
-        fig.update_layout(**PLOT_BASE, **dark_ax(gx=False, tx='Feeder Zone', ty='Alert Count'), height=260)
+        fig.update_layout(**PLOT_BASE,
+                          **dark_ax(gx=False, tx='Feeder Zone', ty='Alert Count'),
+                          height=260)
         st.plotly_chart(fig, use_container_width=True)
 
     with right:
@@ -459,15 +481,16 @@ def show_operator_dashboard():
             textfont=dict(color='#e6edf3', family='Space Mono', size=12),
         ))
         fig2.update_layout(**PLOT_BASE,
-                           xaxis=dict(showgrid=True, gridcolor='#21262d', linecolor='#30363d', tickfont=dict(color='#8b949e')),
-                           yaxis=dict(showgrid=False, linecolor='#30363d', tickfont=dict(color='#c9d1d9', size=11)),
-                           height=260)
+            xaxis=dict(showgrid=True, gridcolor='#21262d', linecolor='#30363d',
+                       tickfont=dict(color='#8b949e')),
+            yaxis=dict(showgrid=False, linecolor='#30363d',
+                       tickfont=dict(color='#c9d1d9', size=11)),
+            height=260)
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ── Alert Severity Trend (real CSV from Dhejasvi) ──
+    # ── Alert Severity Trend (real CSV) ──
     st.markdown("<div class='section-title'>Alert Severity Trend — 30-Day Overview</div>",
                 unsafe_allow_html=True)
-
     trend_df = load_severity_trend()
 
     t1, t2, _ = st.columns([1, 1, 4])
@@ -478,29 +501,37 @@ def show_operator_dashboard():
     fig_trend = go.Figure()
     if chart_type == "Stacked Bar":
         for col, color in [('High','#f85149'),('Medium','#d29922'),('Low','#3fb950')]:
-            fig_trend.add_trace(go.Bar(
-                x=trend_df['date'], y=trend_df[col], name=col, marker_color=color,
-                hovertemplate=f'%{{x|%b %d}} — {col}: %{{y}}<extra></extra>'))
+            if col in trend_df.columns:
+                fig_trend.add_trace(go.Bar(
+                    x=trend_df['date'], y=trend_df[col], name=col, marker_color=color,
+                    hovertemplate=f'%{{x|%b %d}} — {col}: %{{y}}<extra></extra>'))
         fig_trend.update_layout(barmode='stack')
     else:
-        pairs = [('High','#f85149','rgba(248,81,73,0.07)'),
-                 ('Medium','#d29922','rgba(210,153,34,0.05)'),
-                 ('Low','#3fb950','rgba(63,185,80,0.04)')]
-        for col, color, fill in pairs:
-            fig_trend.add_trace(go.Scatter(
-                x=trend_df['date'], y=trend_df[col], name=col,
-                line=dict(color=color, width=2),
-                fill='tozeroy', fillcolor=fill,
-                hovertemplate=f'%{{x|%b %d}} — {col}: %{{y}}<extra></extra>'))
+        for col, color, fill in [
+            ('High',   '#f85149', 'rgba(248,81,73,0.07)'),
+            ('Medium', '#d29922', 'rgba(210,153,34,0.05)'),
+            ('Low',    '#3fb950', 'rgba(63,185,80,0.04)'),
+        ]:
+            if col in trend_df.columns:
+                fig_trend.add_trace(go.Scatter(
+                    x=trend_df['date'], y=trend_df[col], name=col,
+                    line=dict(color=color, width=2),
+                    fill='tozeroy', fillcolor=fill,
+                    hovertemplate=f'%{{x|%b %d}} — {col}: %{{y}}<extra></extra>'))
 
     fig_trend.update_layout(**PLOT_BASE, **dark_ax(tx='Date', ty='Alert Count'),
                             height=270, hovermode='x unified')
     st.plotly_chart(fig_trend, use_container_width=True)
 
-    total_high   = int(trend_df['High'].sum())
-    total_medium = int(trend_df['Medium'].sum())
-    total_low    = int(trend_df['Low'].sum())
-    peak_day     = trend_df.loc[trend_df['High'].idxmax(), 'date']
+    # Trend summary KPIs
+    h_col = trend_df['High']   if 'High'   in trend_df.columns else pd.Series([0])
+    m_col = trend_df['Medium'] if 'Medium' in trend_df.columns else pd.Series([0])
+    l_col = trend_df['Low']    if 'Low'    in trend_df.columns else pd.Series([0])
+    total_high   = int(h_col.sum())
+    total_medium = int(m_col.sum())
+    total_low    = int(l_col.sum())
+    peak_idx     = h_col.idxmax()
+    peak_day     = trend_df.loc[peak_idx, 'date']
     peak_day_str = peak_day.strftime('%b %d') if hasattr(peak_day, 'strftime') else str(peak_day)
 
     st.markdown(f"""
@@ -528,7 +559,7 @@ def show_operator_dashboard():
         font-size:0.72rem;'>data/severity_trend.csv</span>
     </p>""", unsafe_allow_html=True)
 
-    # ── Alert Queue ──
+    # ── Inspection Alert Queue ──
     st.markdown("<div class='section-title'>Inspection Alert Queue</div>", unsafe_allow_html=True)
 
     f1, f2, _ = st.columns([1, 1, 3])
@@ -546,23 +577,26 @@ def show_operator_dashboard():
     filtered = filtered.sort_values('signal_count', ascending=False)
 
     if filtered.empty:
-        st.markdown("<p style='color:#8b949e;padding:20px 0;'>No alerts match the selected filters.</p>",
+        st.markdown("<p style='color:#8b949e;padding:20px 0;'>No alerts match selected filters.</p>",
                     unsafe_allow_html=True)
     else:
         for _, row in filtered.iterrows():
             icon      = {'High':'🔴','Medium':'🟡','Low':'🟢'}.get(row['risk_level'], '⚪')
             lines     = row['explanation'].split('\n')
-            why_text  = next((l.replace('WHY: ','')        for l in lines if l.startswith('WHY')), '')
-            how_text  = next((l.replace('HOW SERIOUS: ','') for l in lines if l.startswith('HOW')), '')
-            what_text = next((l.replace('WHAT TO DO: ','')  for l in lines if l.startswith('WHAT')), '')
+            why_text  = next((l.replace('WHY: ','')         for l in lines if l.startswith('WHY')),  '')
+            how_text  = next((l.replace('HOW SERIOUS: ','')  for l in lines if l.startswith('HOW')),  '')
+            what_text = next((l.replace('WHAT TO DO: ','')   for l in lines if l.startswith('WHAT')), '')
             st.markdown(f"""
             <div class='alert-card {row["risk_level"].lower()}'>
-                <div style='display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;'>
+                <div style='display:flex;align-items:center;justify-content:space-between;
+                            flex-wrap:wrap;gap:8px;'>
                     <span>
                         <span class='alert-meter'>{icon} {row['meter_id']}</span>
                         <span class='risk-badge {row["risk_level"]}'>{row['risk_level']} Risk</span>
                     </span>
-                    <span class='alert-meta'>Zone: {row['feeder_zone']} &nbsp;·&nbsp; {row['signal_count']} signals</span>
+                    <span class='alert-meta'>
+                        Zone: {row['feeder_zone']} &nbsp;·&nbsp; {row['signal_count']} signals
+                    </span>
                 </div>
                 <div class='why-block'>
                     <span class='why-key'>WHY ›</span> {why_text}<br>
@@ -600,8 +634,6 @@ def show_zone_map():
     </div>""", unsafe_allow_html=True)
 
     df = load_alerts()
-
-    # Bangalore BESCOM area coordinates
     zone_coords = {
         'Zone_1': (12.9716, 77.5946, 'Rajajinagar'),
         'Zone_2': (12.9352, 77.6245, 'Koramangala'),
@@ -627,14 +659,12 @@ def show_zone_map():
     for zone, (lat, lon, area) in zone_coords.items():
         if zone not in zone_risk['feeder_zone'].values:
             rows.append({'feeder_zone': zone, 'area': area,
-                         'risk_level': 'Low', 'alert_count': 0,
-                         'lat': lat, 'lon': lon})
+                         'risk_level': 'Low', 'alert_count': 0, 'lat': lat, 'lon': lon})
 
     map_df    = pd.DataFrame(rows)
     color_map = {'High':'#f85149','Medium':'#d29922','Low':'#3fb950'}
-    size_map  = {'High':30,'Medium':20,'Low':12}
     map_df['color'] = map_df['risk_level'].map(color_map)
-    map_df['size']  = map_df['risk_level'].map(size_map)
+    map_df['size']  = map_df['risk_level'].map({'High':30,'Medium':20,'Low':12})
 
     fig_map = go.Figure()
     for risk in ['High','Medium','Low']:
@@ -667,24 +697,17 @@ def show_zone_map():
                 <div style='font-family:Space Mono,monospace;font-size:0.8rem;
                             color:{color};font-weight:700;margin:6px 0;'>{row['risk_level']}</div>
                 <div style='color:#8b949e;font-size:0.75rem;'>{row['area']}</div>
-                <div style='color:#8b949e;font-size:0.72rem;margin-top:4px;'>{row['alert_count']} alerts</div>
+                <div style='color:#8b949e;font-size:0.72rem;margin-top:4px;'>
+                    {row['alert_count']} alerts</div>
             </div>""", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
 # PAGE 3 — CONSUMER DASHBOARD
 #
-# forecast_output.csv has ZONE-level data only
-# (no meter_id column). Each zone has 56 hourly
-# rows across ~2.5 days (Apr 28–30).
-#
-# Consumer selection works by:
-#   - Zone dropdown  → filters real CSV rows
-#   - Meter dropdown → selects from real meter IDs
-#     in alerts_with_explanations.csv for that zone
-#   - Bill calculation uses a per-meter offset so
-#     each meter shows a slightly different bill
-#     (realistic variation within the same zone)
+# forecast_output.csv now has meter_id column.
+# Each meter belongs to one zone.
+# Charts and bill are calculated per selected meter only.
 # ─────────────────────────────────────────────
 def show_consumer_dashboard():
     st.markdown("""
@@ -698,52 +721,83 @@ def show_consumer_dashboard():
     </div>""", unsafe_allow_html=True)
 
     forecast = load_forecast()
-    alerts   = load_alerts()
+
+    # ── Detect if forecast has meter_id column ──
+    has_meter_id = 'meter_id' in forecast.columns
 
     col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        feeder_zone = st.selectbox("Select Your Feeder Zone",
-                                   sorted(forecast['feeder_zone'].unique()))
-    with col_s2:
-        # Show only meter IDs that actually belong to this zone from the real alerts CSV
-        zone_meters = sorted(alerts[alerts['feeder_zone'] == feeder_zone]['meter_id'].unique().tolist())
-        if not zone_meters:
-            zone_meters = ['No meters flagged in this zone']
-        meter_id = st.selectbox("Select Your Meter ID", zone_meters)
 
-    # Zone-level forecast data (real from Sunetra)
-    zone_data = forecast[forecast['feeder_zone'] == feeder_zone].copy()
+    if has_meter_id:
+        # New CSV: filter by meter directly
+        with col_s1:
+            feeder_zone = st.selectbox("Select Your Feeder Zone",
+                                       sorted(forecast['feeder_zone'].unique()))
+        with col_s2:
+            zone_meters = sorted(
+                forecast[forecast['feeder_zone'] == feeder_zone]['meter_id'].unique().tolist()
+            )
+            meter_id = st.selectbox("Select Your Meter ID", zone_meters)
 
-    # ── Bill calculation ──
-    # forecast_output is zone-level (all meters combined).
-    # Divide by meters_per_zone to get per-consumer figure.
-    # Add a small per-meter offset so each meter shows different bill.
-    rate_per_kwh    = 6.5
-    meters_per_zone = 200
-    total_actual    = zone_data['total_kwh'].sum()
-    days_in_data    = max(1, (zone_data['timestamp'].max() - zone_data['timestamp'].min()).days + 1)
+        # Filter to ONLY the selected meter — single clean line on chart
+        meter_data = forecast[
+            (forecast['feeder_zone'] == feeder_zone) &
+            (forecast['meter_id'] == meter_id)
+        ].copy().sort_values('timestamp')
 
-    # Base projection for the zone
-    base_projected_kwh  = (total_actual / days_in_data) * 30 / meters_per_zone
+        # ── Bill: direct per-meter calculation (no division needed) ──
+        rate_per_kwh  = 6.5
+        meter_data = meter_data.sort_values('timestamp')
 
-    # Per-meter variation: use meter number as a seed for consistent but unique offset
-    meter_num   = int(''.join(filter(str.isdigit, str(meter_id))) or 0)
-    variation   = ((meter_num % 20) - 10) / 100   # -10% to +10% variation
-    projected_kwh  = base_projected_kwh * (1 + variation)
-    projected_bill = projected_kwh * rate_per_kwh
+        # Convert cumulative → actual usage
+        meter_data['consption'] = meter_data['total_kwh'].diff().clip(lower=0)
 
-    # Peak usage stats
-    zone_data['hour'] = zone_data['timestamp'].dt.hour
-    peak_data    = zone_data[zone_data['hour'].between(18, 22)]
-    offpeak_data = zone_data[~zone_data['hour'].between(18, 22)]
-    peak_avg     = peak_data['total_kwh'].mean()
-    offpeak_avg  = offpeak_data['total_kwh'].mean()
-    peak_pct     = round(((peak_avg - offpeak_avg) / offpeak_avg) * 100) if offpeak_avg > 0 else 0
-    peak_savings = round((peak_avg - offpeak_avg) * 5 * 30 / meters_per_zone * rate_per_kwh)
+        total_actual = meter_data['consption'].sum()
+
+        days_in_data = max(1, (meter_data['timestamp'].max() - meter_data['timestamp'].min()).days + 1)
+
+        projected_kwh = (total_actual / days_in_data) * 30
+
+        projected_bill = projected_kwh * rate_per_kwh
+        chart_data = meter_data  # single meter's data for charts
+
+    else:
+        # Old CSV: zone-level only, use variation trick
+        alerts = load_alerts() if os.path.exists("data/alerts_with_explanations.csv") else None
+        with col_s1:
+            feeder_zone = st.selectbox("Select Your Feeder Zone",
+                                       sorted(forecast['feeder_zone'].unique()))
+        with col_s2:
+            if alerts is not None:
+                zone_meters = sorted(
+                    alerts[alerts['feeder_zone'] == feeder_zone]['meter_id'].unique().tolist()
+                )
+                if not zone_meters:
+                    zone_meters = ['No meters in this zone']
+            else:
+                zone_meters = ['MTR_DEMO']
+            meter_id = st.selectbox("Select Your Meter ID", zone_meters)
+
+        chart_data = forecast[forecast['feeder_zone'] == feeder_zone].copy().sort_values('timestamp')
+        rate_per_kwh    = 6.5
+        total_actual    = chart_data['total_kwh'].sum()
+        days_in_data    = max(1, (chart_data['timestamp'].max() - chart_data['timestamp'].min()).days + 1)
+        meter_num       = int(''.join(filter(str.isdigit, str(meter_id))) or 0)
+        variation       = ((meter_num % 20) - 10) / 100
+        projected_kwh   = (total_actual / days_in_data) * 30 / 200 * (1 + variation)
+        projected_bill  = projected_kwh * rate_per_kwh
+
+    # ── Peak stats ──
+    chart_data['hour'] = chart_data['timestamp'].dt.hour
+    peak_data     = chart_data[chart_data['hour'].between(18, 22)]
+    offpeak_data  = chart_data[~chart_data['hour'].between(18, 22)]
+    peak_avg      = peak_data['total_kwh'].mean()
+    offpeak_avg   = offpeak_data['total_kwh'].mean()
+    peak_pct      = round(((peak_avg - offpeak_avg) / offpeak_avg) * 100) if offpeak_avg > 0 else 0
+    peak_savings  = round(abs(peak_avg - offpeak_avg) * 5 * 30 * rate_per_kwh / 1000 * 100)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Bill cards ──
+    # ── Bill Cards ──
     b1, b2, b3 = st.columns(3)
     with b1:
         st.markdown(f"""
@@ -769,45 +823,53 @@ def show_consumer_dashboard():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Actual vs Predicted chart ──
+    # ── Actual vs Predicted Chart (single meter only) ──
     st.markdown("<div class='section-title'>Hourly Consumption — Actual vs AI Forecast</div>",
                 unsafe_allow_html=True)
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=zone_data['timestamp'], y=zone_data['total_kwh'],
-        name='Actual Usage', line=dict(color='#58a6ff', width=2),
-        fill='tozeroy', fillcolor='rgba(88,166,255,0.07)'
+        x=chart_data['timestamp'], y=chart_data['total_kwh'],
+        name='Actual Usage',
+        line=dict(color='#58a6ff', width=2.5),
+        fill='tozeroy', fillcolor='rgba(88,166,255,0.08)'
     ))
     fig.add_trace(go.Scatter(
-        x=zone_data['timestamp'], y=zone_data['predicted_kwh'],
-        name='AI Forecast', line=dict(color='#f0c040', width=2, dash='dot'),
+        x=chart_data['timestamp'], y=chart_data['predicted_kwh'],
+        name='AI Forecast',
+        line=dict(color='#f0c040', width=2, dash='dot'),
     ))
-    fig.update_layout(**PLOT_BASE,
-                      **dark_ax(tx='Date / Hour', ty='Consumption (kWh)'),
-                      height=300, hovermode='x unified')
+    fig.update_layout(
+        **PLOT_BASE,
+        **dark_ax(tx='Date / Hour', ty='Consumption (kWh)'),
+        height=300, hovermode='x unified'
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-    # ── Peak hours chart ──
-    st.markdown("<div class='section-title'>Average Usage by Hour of Day</div>", unsafe_allow_html=True)
+    # ── Peak Hours Chart ──
+    st.markdown("<div class='section-title'>Average Usage by Hour of Day</div>",
+                unsafe_allow_html=True)
 
-    hourly_avg = zone_data.groupby('hour')['total_kwh'].mean().reset_index()
+    hourly_avg = chart_data.groupby('hour')['total_kwh'].mean().reset_index()
     hourly_avg['is_peak'] = hourly_avg['hour'].between(18, 22)
     bar_colors = ['#f85149' if p else '#388bfd' for p in hourly_avg['is_peak']]
 
     fig3 = go.Figure(go.Bar(
-        x=hourly_avg['hour'], y=hourly_avg['total_kwh'],
+        x=hourly_avg['hour'],
+        y=hourly_avg['total_kwh'],
         marker=dict(color=bar_colors, line=dict(width=0)),
-        hovertemplate='Hour %{x}:00 — %{y:.1f} kWh<extra></extra>',
+        hovertemplate='Hour %{x}:00 — %{y:.2f} kWh<extra></extra>',
     ))
-    fig3.update_layout(**PLOT_BASE,
-                       xaxis=dict(showgrid=False, linecolor='#30363d', dtick=1,
-                                  tickfont=dict(color='#8b949e'), title='Hour of Day',
-                                  title_font=dict(color='#8b949e')),
-                       yaxis=dict(showgrid=True, gridcolor='#21262d', linecolor='#30363d',
-                                  tickfont=dict(color='#8b949e'), title='Avg kWh',
-                                  title_font=dict(color='#8b949e')),
-                       height=240)
+    fig3.update_layout(
+        **PLOT_BASE,
+        xaxis=dict(showgrid=False, linecolor='#30363d', dtick=1,
+                   tickfont=dict(color='#8b949e'), title='Hour of Day',
+                   title_font=dict(color='#8b949e')),
+        yaxis=dict(showgrid=True, gridcolor='#21262d', linecolor='#30363d',
+                   tickfont=dict(color='#8b949e'), title='Avg kWh',
+                   title_font=dict(color='#8b949e')),
+        height=250
+    )
     st.plotly_chart(fig3, use_container_width=True)
     st.markdown(
         "<p style='color:#8b949e;font-size:0.82rem;margin-top:-8px;'>"
@@ -815,28 +877,28 @@ def show_consumer_dashboard():
         "these hours reduces your bill and helps BESCOM manage grid load.</p>",
         unsafe_allow_html=True)
 
-    # ── Smart Tips (calculated from real data) ──
+    # ── Smart Tips ──
     st.markdown("<div class='section-title'>Personalised Smart Tips</div>", unsafe_allow_html=True)
 
     tips = []
     if peak_pct > 20:
         tips.append(("Peak Hour Usage",
-            f"You use {peak_pct}% more power during peak hours (6 PM-10 PM). "
+            f"Meter {meter_id} uses {peak_pct}% more power during peak hours (6 PM-10 PM). "
             f"Shifting heavy appliances like washing machines and geysers to off-peak hours "
             f"could save you approximately Rs. {peak_savings} this month."))
 
     if projected_kwh > 250:
         tips.append(("High Consumption Alert",
-            f"Meter {meter_id}: projected usage of {projected_kwh:.0f} kWh is above the zone average. "
+            f"Meter {meter_id}: projected usage of {projected_kwh:.0f} kWh is above average. "
             f"Check for appliances left on standby — they can account for up to 10% of your bill."))
     else:
         tips.append(("Good Usage Pattern",
             f"Meter {meter_id}: consumption of {projected_kwh:.0f} kWh is within a healthy range. "
-            f"You are using energy responsibly compared to zone peers."))
+            f"You are using energy responsibly compared to zone peers in {feeder_zone}."))
 
     tips.append(("Billing Cycle",
-        f"Your estimated bill for {feeder_zone} / {meter_id} is Rs. {projected_bill:,.0f} "
-        f"by end of month. BESCOM billing cycle closes on the last day of the month."))
+        f"Estimated bill for {meter_id} ({feeder_zone}): Rs. {projected_bill:,.0f} by end of month. "
+        f"BESCOM billing cycle closes on the last day of the month."))
 
     tips.append(("Grid Support",
         "BESCOM faces highest grid stress between 6 PM and 10 PM. "
@@ -849,8 +911,8 @@ def show_consumer_dashboard():
         </div>""", unsafe_allow_html=True)
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
-    with st.expander("View Raw Forecast Data"):
-        st.dataframe(zone_data.drop(columns=['hour']), use_container_width=True)
+    with st.expander("View Raw Meter Data"):
+        st.dataframe(chart_data.drop(columns=['hour']), use_container_width=True)
 
 
 # ─────────────────────────────────────────────
