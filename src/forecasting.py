@@ -58,6 +58,12 @@ def train_and_forecast(df):
 
     output = pd.concat(results)
     output = output.rename(columns={'consumption_kwh': 'total_kwh'})
+    # Add meter count per zone for per-meter bill calculation
+    meter_count = df.groupby('feeder_zone')['meter_id'].nunique().reset_index()
+    meter_count.columns = ['feeder_zone', 'zone_meter_count']
+    output = output.merge(meter_count, on='feeder_zone', how='left')
+    output['meter_kwh'] = output['total_kwh'] / output['zone_meter_count']
+    output['meter_predicted_kwh'] = output['predicted_kwh'] / output['zone_meter_count']        
     output.to_csv('data/forecast_output.csv', index=False)
     print(f'\nDone! forecast_output.csv saved with {len(output)} rows.')
     print('Columns:', output.columns.tolist())
