@@ -284,6 +284,14 @@ def load_forecast():
     return df
 
 @st.cache_data
+def load_raw_meter_data():
+    path = "data/smart_meter_data.csv"
+    if not os.path.exists(path):
+        st.error("Missing: data/smart_meter_data.csv")
+        st.stop()
+    return pd.read_csv(path, parse_dates=["timestamp"])
+
+@st.cache_data
 def load_severity_trend():
     path = "data/severity_trend.csv"
     if not os.path.exists(path):
@@ -721,6 +729,7 @@ def show_consumer_dashboard():
     </div>""", unsafe_allow_html=True)
 
     forecast = load_forecast()
+    raw_meter_data = load_raw_meter_data()
 
     # ── Detect if forecast has meter_id column ──
     has_meter_id = 'meter_id' in forecast.columns
@@ -748,15 +757,16 @@ def show_consumer_dashboard():
         rate_per_kwh  = 6.5
         meter_data = meter_data.sort_values('timestamp')
 
-        # Convert cumulative → actual usage
-        meter_data['consption'] = meter_data['total_kwh'].diff().clip(lower=0)
+        
+        
+        usage_col = "meter_kwh" if "meter_kwh" in meter_data.columns else "total_kwh"
+        pred_col = "meter_predicted_kwh" if "meter_predicted_kwh" in meter_data.columns else "predicted_kwh"
 
-        total_actual = meter_data['consption'].sum()
+        raw_selected = raw_meter_data[raw_meter_data["meter_id"] == meter_id].copy()
 
-        days_in_data = max(1, (meter_data['timestamp'].max() - meter_data['timestamp'].min()).days + 1)
+        total_actual = raw_selected["consumption_kwh"].sum()
 
-        projected_kwh = (total_actual / days_in_data) * 30
-
+        projected_kwh = total_actual
         projected_bill = projected_kwh * rate_per_kwh
         chart_data = meter_data  # single meter's data for charts
 
@@ -829,13 +839,13 @@ def show_consumer_dashboard():
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=chart_data['timestamp'], y=chart_data['total_kwh'],
+        x=chart_data['timestamp'], y=chart_data[usage_col],
         name='Actual Usage',
         line=dict(color='#58a6ff', width=2.5),
         fill='tozeroy', fillcolor='rgba(88,166,255,0.08)'
     ))
     fig.add_trace(go.Scatter(
-        x=chart_data['timestamp'], y=chart_data['predicted_kwh'],
+        x=chart_data['timestamp'], y=chart_data[pred_col],
         name='AI Forecast',
         line=dict(color='#f0c040', width=2, dash='dot'),
     ))
@@ -850,13 +860,13 @@ def show_consumer_dashboard():
     st.markdown("<div class='section-title'>Average Usage by Hour of Day</div>",
                 unsafe_allow_html=True)
 
-    hourly_avg = chart_data.groupby('hour')['total_kwh'].mean().reset_index()
+    hourly_avg = chart_data.groupby('hour')[usage_col].mean().reset_index()
     hourly_avg['is_peak'] = hourly_avg['hour'].between(18, 22)
     bar_colors = ['#f85149' if p else '#388bfd' for p in hourly_avg['is_peak']]
 
     fig3 = go.Figure(go.Bar(
         x=hourly_avg['hour'],
-        y=hourly_avg['total_kwh'],
+        y=hourly_avg[usage_col],
         marker=dict(color=bar_colors, line=dict(width=0)),
         hovertemplate='Hour %{x}:00 — %{y:.2f} kWh<extra></extra>',
     ))
@@ -913,6 +923,27 @@ def show_consumer_dashboard():
 
     with st.expander("View Raw Meter Data"):
         st.dataframe(chart_data.drop(columns=['hour']), use_container_width=True)
+    st.markdown("<div class='section-title'>All Consumers — Zone Summary</div>", unsafe_allow_html=True)
+
+    # Create summary table
+    summary_df = raw_meter_data.groupby(["feeder_zone", "meter_id"])["consumption_kwh"].sum().reset_index()
+
+    summary_df["bill_rs"] = summary_df["consumption_kwh"] * 6.5
+
+    summary_df = summary_df.sort_values(["feeder_zone", "meter_id"])
+
+    # Show table
+    st.dataframe(summary_df, use_container_width=True)
+
+    # Download button
+    csv = summary_df.to_csv(index=False).encode('utf-8')
+
+    st.download_button(
+        label="Download Consumer Summary CSV",
+        data=csv,
+        file_name="consumer_summary.csv",
+        mime="text/csv"
+    )
 
 
 # ─────────────────────────────────────────────
