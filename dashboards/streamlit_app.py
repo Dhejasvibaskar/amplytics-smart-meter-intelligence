@@ -408,15 +408,20 @@ def show_operator_dashboard():
         </div>
     </div>""", unsafe_allow_html=True)
 
+    forecast_df = load_forecast()
+    all_zones = sorted(forecast_df['feeder_zone'].unique().tolist())
     c1, c2, _ = st.columns([1, 1, 3])
     with c1:
-        sim_meter = st.selectbox("Target Meter", sorted(df['meter_id'].unique().tolist()))
+        sim_zone = st.selectbox("Zone", all_zones)
     with c2:
-        sim_zone  = st.selectbox("Zone", sorted(df['feeder_zone'].unique().tolist()))
+        zone_meters = sorted(forecast_df[forecast_df['feeder_zone'] == sim_zone]['meter_id'].unique().tolist())
+        sim_meter = st.selectbox("Target Meter", zone_meters)
 
     if st.button("⚡ Simulate Theft Detection", type="primary"):
         with st.spinner("Injecting anomaly pattern..."):
             time.sleep(0.8)
+            st.session_state['sim_meter'] = sim_meter
+            st.session_state['sim_zone'] = sim_zone
         prog   = st.progress(0)
         status = st.empty()
         for pct, msg in [
@@ -745,7 +750,9 @@ def show_consumer_dashboard():
             zone_meters = sorted(
                 forecast[forecast['feeder_zone'] == feeder_zone]['meter_id'].unique().tolist()
             )
-            meter_id = st.selectbox("Select Your Meter ID", zone_meters)
+            default_meter = st.session_state.get('sim_meter', zone_meters[0])
+            default_idx = zone_meters.index(default_meter) if default_meter in zone_meters else 0
+            meter_id = st.selectbox("Select Your Meter ID", zone_meters, index=default_idx)
 
         # Filter to ONLY the selected meter — single clean line on chart
         meter_data = forecast[
