@@ -225,7 +225,7 @@ streamlit run dashboards/streamlit_app.py
 Alternative legacy entry point:
 
 ```powershell
-streamlit run app.py
+python -m streamlit run dashboards/streamlit_app.py
 ```
 
 ## Demo Data
