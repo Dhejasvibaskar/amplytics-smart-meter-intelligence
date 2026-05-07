@@ -287,8 +287,7 @@ def load_forecast():
 def load_raw_meter_data():
     path = "data/smart_meter_data.csv"
     if not os.path.exists(path):
-        st.error("Missing: data/smart_meter_data.csv")
-        st.stop()
+        return None   # handled gracefully in consumer view
     return pd.read_csv(path, parse_dates=["timestamp"])
 
 @st.cache_data
@@ -408,20 +407,22 @@ def show_operator_dashboard():
         </div>
     </div>""", unsafe_allow_html=True)
 
-    forecast_df = load_forecast()
-    all_zones = sorted(forecast_df['feeder_zone'].unique().tolist())
     c1, c2, _ = st.columns([1, 1, 3])
+    # Load forecast for simulation dropdowns so ALL 5 zones and ALL 50 meters are available
+    forecast_for_sim = load_forecast()
+    all_sim_meters = sorted(forecast_for_sim['meter_id'].unique().tolist())
+    all_sim_zones  = sorted(forecast_for_sim['feeder_zone'].unique().tolist())
     with c1:
-        sim_zone = st.selectbox("Zone", all_zones)
+        sim_meter = st.selectbox("Target Meter", all_sim_meters)
     with c2:
-        zone_meters = sorted(forecast_df[forecast_df['feeder_zone'] == sim_zone]['meter_id'].unique().tolist())
-        sim_meter = st.selectbox("Target Meter", zone_meters)
+        # Auto-select zone matching chosen meter, but still allow override
+        meter_zone = forecast_for_sim[forecast_for_sim['meter_id'] == sim_meter]['feeder_zone'].iloc[0]
+        default_idx = all_sim_zones.index(meter_zone) if meter_zone in all_sim_zones else 0
+        sim_zone  = st.selectbox("Zone", all_sim_zones, index=default_idx)
 
     if st.button("⚡ Simulate Theft Detection", type="primary"):
         with st.spinner("Injecting anomaly pattern..."):
             time.sleep(0.8)
-            st.session_state['sim_meter'] = sim_meter
-            st.session_state['sim_zone'] = sim_zone
         prog   = st.progress(0)
         status = st.empty()
         for pct, msg in [
@@ -439,17 +440,23 @@ def show_operator_dashboard():
                 unsafe_allow_html=True)
             time.sleep(0.55)
         prog.empty(); status.empty()
+        st.session_state['sim_result'] = {'meter': sim_meter, 'zone': sim_zone}
+
+    if 'sim_result' in st.session_state:
+        r = st.session_state['sim_result']
+        sim_meter_r = r['meter']
+        sim_zone_r  = r['zone']
         st.markdown(f"""
         <div class='alert-card high' style='border:1px solid rgba(248,81,73,0.4);margin-top:8px;'>
             <div style='display:flex;align-items:center;justify-content:space-between;
                         flex-wrap:wrap;gap:8px;'>
                 <span>
-                    <span class='alert-meter'>🔴 {sim_meter}</span>
+                    <span class='alert-meter'>🔴 {sim_meter_r}</span>
                     <span class='risk-badge High'>High Risk</span>
                     <span style='color:#f85149;font-family:Space Mono,monospace;
                                  font-size:0.68rem;margin-left:10px;'>SIMULATED</span>
                 </span>
-                <span class='alert-meta'>Zone: {sim_zone} &nbsp;·&nbsp; 3 signals triggered</span>
+                <span class='alert-meta'>Zone: {sim_zone_r} &nbsp;·&nbsp; 3 signals triggered</span>
             </div>
             <div class='why-block'>
                 <span class='why-key'>WHY ›</span> Consumption 38% below peer cluster +
@@ -471,9 +478,20 @@ def show_operator_dashboard():
     with left:
         st.markdown("<div class='section-title'>Zone Risk Overview</div>", unsafe_allow_html=True)
         zone_summary = df.groupby(['feeder_zone', 'risk_level']).size().reset_index(name='count')
+        # Ensure ALL 5 zones appear even if they have zero alerts
+        all_zones = ['Zone_1', 'Zone_2', 'Zone_3', 'Zone_4', 'Zone_5']
+        all_risk_levels = ['High', 'Medium', 'Low']
+        full_index = pd.MultiIndex.from_product([all_zones, all_risk_levels],
+                                                names=['feeder_zone', 'risk_level'])
+        zone_summary = (zone_summary
+                        .set_index(['feeder_zone', 'risk_level'])
+                        .reindex(full_index, fill_value=0)
+                        .reset_index())
         fig = px.bar(zone_summary, x='feeder_zone', y='count', color='risk_level', barmode='stack',
                      color_discrete_map={'High':'#f85149','Medium':'#d29922','Low':'#3fb950'},
-                     labels={'feeder_zone':'Feeder Zone','count':'Alert Count','risk_level':'Risk'})
+                     labels={'feeder_zone':'Feeder Zone','count':'Alert Count','risk_level':'Risk'},
+                     category_orders={'feeder_zone': all_zones,
+                                      'risk_level': ['High', 'Medium', 'Low']})
         fig.update_layout(**PLOT_BASE,
                           **dark_ax(gx=False, tx='Feeder Zone', ty='Alert Count'),
                           height=260)
@@ -734,15 +752,27 @@ def show_consumer_dashboard():
     </div>""", unsafe_allow_html=True)
 
     forecast = load_forecast()
-    raw_meter_data = load_raw_meter_data()
+
+    # ── Load raw meter data safely (fallback to forecast if file missing) ──
+    raw_meter_data_path = "data/smart_meter_data.csv"
+    if os.path.exists(raw_meter_data_path):
+        raw_meter_data = pd.read_csv(raw_meter_data_path, parse_dates=["timestamp"])
+    else:
+        # Build raw_meter_data from forecast so consumer view still works
+        raw_meter_data = forecast[['meter_id', 'feeder_zone', 'timestamp', 'meter_kwh']].copy()
+        raw_meter_data = raw_meter_data.rename(columns={'meter_kwh': 'consumption_kwh'})
 
     # ── Detect if forecast has meter_id column ──
     has_meter_id = 'meter_id' in forecast.columns
 
+    # Always define usage_col / pred_col at top level (safe defaults)
+    usage_col = "meter_kwh" if "meter_kwh" in forecast.columns else "total_kwh"
+    pred_col  = "meter_predicted_kwh" if "meter_predicted_kwh" in forecast.columns else "predicted_kwh"
+
     col_s1, col_s2 = st.columns(2)
 
     if has_meter_id:
-        # New CSV: filter by meter directly
+        # New CSV: filter by zone then meter
         with col_s1:
             feeder_zone = st.selectbox("Select Your Feeder Zone",
                                        sorted(forecast['feeder_zone'].unique()))
@@ -750,9 +780,7 @@ def show_consumer_dashboard():
             zone_meters = sorted(
                 forecast[forecast['feeder_zone'] == feeder_zone]['meter_id'].unique().tolist()
             )
-            default_meter = st.session_state.get('sim_meter', zone_meters[0])
-            default_idx = zone_meters.index(default_meter) if default_meter in zone_meters else 0
-            meter_id = st.selectbox("Select Your Meter ID", zone_meters, index=default_idx)
+            meter_id = st.selectbox("Select Your Meter ID", zone_meters)
 
         # Filter to ONLY the selected meter — single clean line on chart
         meter_data = forecast[
@@ -760,25 +788,25 @@ def show_consumer_dashboard():
             (forecast['meter_id'] == meter_id)
         ].copy().sort_values('timestamp')
 
-        # ── Bill: direct per-meter calculation (no division needed) ──
-        rate_per_kwh  = 6.5
-        meter_data = meter_data.sort_values('timestamp')
+        # ── Bill: extrapolate per-meter usage to 30-day projection ──
+        rate_per_kwh = 6.5
+        chart_data   = meter_data
 
-        
-        
-        usage_col = "meter_kwh" if "meter_kwh" in meter_data.columns else "total_kwh"
-        pred_col = "meter_predicted_kwh" if "meter_predicted_kwh" in meter_data.columns else "predicted_kwh"
+        raw_selected  = raw_meter_data[raw_meter_data["meter_id"] == meter_id].copy()
+        if not raw_selected.empty and 'consumption_kwh' in raw_selected.columns:
+            total_actual = raw_selected["consumption_kwh"].sum()
+            days_in_data = max(1, (pd.to_datetime(raw_selected['timestamp']).max()
+                                   - pd.to_datetime(raw_selected['timestamp']).min()).days + 1)
+        else:
+            total_actual = chart_data[usage_col].sum()
+            days_in_data = max(1, (chart_data['timestamp'].max()
+                                   - chart_data['timestamp'].min()).days + 1)
 
-        raw_selected = raw_meter_data[raw_meter_data["meter_id"] == meter_id].copy()
-
-        total_actual = raw_selected["consumption_kwh"].sum()
-
-        projected_kwh = total_actual
+        projected_kwh  = (total_actual / days_in_data) * 30
         projected_bill = projected_kwh * rate_per_kwh
-        chart_data = meter_data  # single meter's data for charts
 
     else:
-        # Old CSV: zone-level only, use variation trick
+        # Old CSV: zone-level only
         alerts = load_alerts() if os.path.exists("data/alerts_with_explanations.csv") else None
         with col_s1:
             feeder_zone = st.selectbox("Select Your Feeder Zone",
@@ -794,27 +822,62 @@ def show_consumer_dashboard():
                 zone_meters = ['MTR_DEMO']
             meter_id = st.selectbox("Select Your Meter ID", zone_meters)
 
-        chart_data = forecast[forecast['feeder_zone'] == feeder_zone].copy().sort_values('timestamp')
-        rate_per_kwh    = 6.5
-        total_actual    = chart_data['total_kwh'].sum()
-        days_in_data    = max(1, (chart_data['timestamp'].max() - chart_data['timestamp'].min()).days + 1)
-        meter_num       = int(''.join(filter(str.isdigit, str(meter_id))) or 0)
-        variation       = ((meter_num % 20) - 10) / 100
-        projected_kwh   = (total_actual / days_in_data) * 30 / 200 * (1 + variation)
-        projected_bill  = projected_kwh * rate_per_kwh
+        chart_data   = forecast[forecast['feeder_zone'] == feeder_zone].copy().sort_values('timestamp')
+        rate_per_kwh = 6.5
+        total_actual = chart_data[usage_col].sum()
+        days_in_data = max(1, (chart_data['timestamp'].max() - chart_data['timestamp'].min()).days + 1)
+        meter_num    = int(''.join(filter(str.isdigit, str(meter_id))) or 0)
+        variation    = ((meter_num % 20) - 10) / 100
+        projected_kwh  = (total_actual / days_in_data) * 30 / 200 * (1 + variation)
+        projected_bill = projected_kwh * rate_per_kwh
 
-    # ── Peak stats ──
+    # ── Peak stats — always use usage_col ──
+    chart_data = chart_data.copy()
     chart_data['hour'] = chart_data['timestamp'].dt.hour
-    peak_data     = chart_data[chart_data['hour'].between(18, 22)]
-    offpeak_data  = chart_data[~chart_data['hour'].between(18, 22)]
-    peak_avg      = peak_data['total_kwh'].mean()
-    offpeak_avg   = offpeak_data['total_kwh'].mean()
-    peak_pct      = round(((peak_avg - offpeak_avg) / offpeak_avg) * 100) if offpeak_avg > 0 else 0
-    peak_savings  = round(abs(peak_avg - offpeak_avg) * 5 * 30 * rate_per_kwh / 1000 * 100)
+    peak_data    = chart_data[chart_data['hour'].between(18, 22)]
+    offpeak_data = chart_data[~chart_data['hour'].between(18, 22)]
+    peak_avg     = peak_data[usage_col].mean()    if not peak_data.empty    else 0
+    offpeak_avg  = offpeak_data[usage_col].mean() if not offpeak_data.empty else 0
+    peak_pct     = round(((peak_avg - offpeak_avg) / offpeak_avg) * 100) if offpeak_avg > 0 else 0
+    peak_savings = round(abs(peak_avg - offpeak_avg) * 5 * 30 * rate_per_kwh / 1000 * 100)
+
+    # ── Risk Alert Banner — show if this meter has an alert ──
+    alerts_path = "data/alerts_with_explanations.csv"
+    if os.path.exists(alerts_path):
+        alerts_df = load_alerts()
+        meter_alert = alerts_df[alerts_df['meter_id'] == meter_id]
+        if not meter_alert.empty:
+            alert_row  = meter_alert.iloc[0]
+            risk_level = alert_row['risk_level']
+            risk_color = {'High': '#f85149', 'Medium': '#d29922', 'Low': '#3fb950'}.get(risk_level, '#8b949e')
+            risk_bg    = {'High': 'rgba(248,81,73,0.08)', 'Medium': 'rgba(210,153,34,0.08)',
+                          'Low':  'rgba(63,185,80,0.08)'}.get(risk_level, 'transparent')
+            risk_icon  = {'High': '🔴', 'Medium': '🟡', 'Low': '🟢'}.get(risk_level, '⚪')
+            lines      = str(alert_row['explanation']).split('\n')
+            why_text   = next((l.replace('WHY: ', '') for l in lines if l.startswith('WHY')), '')
+            what_text  = next((l.replace('WHAT TO DO: ', '') for l in lines if l.startswith('WHAT')), '')
+            st.markdown(f"""
+            <div style='background:{risk_bg};border:1px solid {risk_color};border-left:4px solid {risk_color};
+                        border-radius:10px;padding:16px 20px;margin:14px 0;'>
+                <div style='display:flex;align-items:center;gap:10px;margin-bottom:8px;'>
+                    <span style='font-family:Space Mono,monospace;font-weight:700;
+                                 color:#e6edf3;font-size:1rem;'>{risk_icon} {meter_id}</span>
+                    <span style='background:rgba({",".join(str(int(risk_color.lstrip("#")[i:i+2],16)) for i in (0,2,4))},0.15);
+                                 color:{risk_color};border:1px solid {risk_color};border-radius:20px;
+                                 padding:2px 10px;font-family:Space Mono,monospace;
+                                 font-size:0.65rem;font-weight:700;'>⚠ {risk_level} Risk — Flagged by Amplytics AI</span>
+                </div>
+                <div style='font-size:0.84rem;color:#c9d1d9;line-height:1.7;'>
+                    <span style='font-family:Space Mono,monospace;color:#58a6ff;
+                                 font-size:0.72rem;font-weight:700;'>WHY FLAGGED ›</span>
+                    {why_text}<br>
+                    <span style='font-family:Space Mono,monospace;color:#58a6ff;
+                                 font-size:0.72rem;font-weight:700;'>ACTION ›</span>
+                    {what_text if what_text else "Contact BESCOM helpline: 1912"}
+                </div>
+            </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── Bill Cards ──
     b1, b2, b3 = st.columns(3)
     with b1:
         st.markdown(f"""
@@ -932,11 +995,16 @@ def show_consumer_dashboard():
         st.dataframe(chart_data.drop(columns=['hour']), use_container_width=True)
     st.markdown("<div class='section-title'>All Consumers — Zone Summary</div>", unsafe_allow_html=True)
 
-    # Create summary table
-    summary_df = raw_meter_data.groupby(["feeder_zone", "meter_id"])["consumption_kwh"].sum().reset_index()
+    # Create summary table — use raw_meter_data if available, else derive from forecast
+    if raw_meter_data is not None and 'consumption_kwh' in raw_meter_data.columns:
+        summary_src = raw_meter_data.copy()
+        summary_df = summary_src.groupby(["feeder_zone", "meter_id"])["consumption_kwh"].sum().reset_index()
+    else:
+        # Derive from forecast meter_kwh
+        summary_df = forecast.groupby(["feeder_zone", "meter_id"])[usage_col].sum().reset_index()
+        summary_df = summary_df.rename(columns={usage_col: "consumption_kwh"})
 
     summary_df["bill_rs"] = summary_df["consumption_kwh"] * 6.5
-
     summary_df = summary_df.sort_values(["feeder_zone", "meter_id"])
 
     # Show table
